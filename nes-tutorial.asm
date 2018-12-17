@@ -12,6 +12,13 @@
 pointerBackgroundLowByte  .rs 1
 pointerBackgroundHighByte .rs 1
 
+;this is a bitmask to keep track of whether a user is holding down a button
+;from left to right, the bits reppresent a, b, select, start, d-pad up,
+;d-pad down, d-pad left, d-pad right
+last_controller_state .rs 1 ;putting this in page 0 so we can access it quickly
+  LDA #$00
+  STA last_controller_state ;initializing to zero
+
 shipTile1Y = $0300
 shipTile2Y = $0304
 shipTile3Y = $0308
@@ -133,16 +140,28 @@ ReadUp:
   AND #%00000001
   BEQ EndReadUp
 
+  ;if bit 5 is set from last_controller_state, it means the player is still
+  ;holding d-pad down and the ship has already moved.
+  LDA last_controller_state
+  AND #%00001000
+  BEQ EndReadUp ; don't move the ship in this case
+
+  ;if bit 5 was not set, it means the player was not already holding d-pad down
+  ;in this case we'll set bit 6 and move the ship
+  LDA last_controller_state
+  ORA #%00001000
+  STA last_controller_state
+
   LDA shipTile1Y
   SEC
-  SBC #$01
+  SBC #$08
   STA shipTile1Y
   STA shipTile2Y
   STA shipTile3Y
 
   LDA shipTile4Y
   SEC
-  SBC #$01
+  SBC #$08
   STA shipTile4Y
   STA shipTile5Y
   STA shipTile6Y
@@ -153,16 +172,28 @@ ReadDown:
   AND #%00000001
   BEQ EndReadDown
 
+  ;if bit 6 is set from last_controller_state, it means the player is still
+  ;holding d-pad down and the ship has already moved.
+  LDA last_controller_state
+  AND #%00000100
+  BEQ EndReadDown ; don't move the ship in this case
+
+  ;if bit 6 was not set, it means the player was not already holding d-pad down
+  ;in this case we'll set bit 6 and move the ship
+  LDA last_controller_state
+  ORA #%00000100
+  STA last_controller_state
+
   LDA shipTile1Y
   CLC
-  ADC #$01
+  ADC #$08
   STA shipTile1Y
   STA shipTile2Y
   STA shipTile3Y
 
   LDA shipTile4Y
   CLC
-  ADC #$01
+  ADC #$08
   STA shipTile4Y
   STA shipTile5Y
   STA shipTile6Y
@@ -173,21 +204,33 @@ ReadLeft:
   AND #%00000001
   BEQ EndReadLeft
 
+  ;if bit 7 is set from last_controller_state, it means the player is still
+  ;holding d-pad left and the ship has already moved.
+  LDA last_controller_state
+  AND #%00000010
+  BEQ EndReadLeft ; don't move the ship in this case
+
+  ;if bit 7 was not set, it means the player was not already holding d-pad left
+  ;in this case we'll set bit 7 and move the ship
+  LDA last_controller_state
+  ORA #%00000010
+  STA last_controller_state
+
   LDA shipTile1X
   SEC
-  SBC #$01
+  SBC #$08
   STA shipTile1X
   STA shipTile4X
 
   LDA shipTile2X
   SEC
-  SBC #$01
+  SBC #$08
   STA shipTile2X
   STA shipTile5X
 
   LDA shipTile3X
   SEC
-  SBC #$01
+  SBC #$08
   STA shipTile3X
   STA shipTile6X
 EndReadLeft:
@@ -197,21 +240,33 @@ ReadRight:
   AND #%00000001
   BEQ EndReadRight
 
+  ;if bit 8 is set from last_controller_state, it means the player is still
+  ;holding d-pad right and the ship has already moved.
+  LDA last_controller_state
+  AND #%00000001
+  BEQ EndReadRight ; don't move the ship in this case
+
+  ;if bit 8 was not set, it means the player was not already holding d-pad Right
+  ;in this case we'll set bit 8 and move the ship
+  LDA last_controller_state
+  ORA #%00000001
+  STA last_controller_state
+
   LDA shipTile1X
   CLC
-  ADC #$01
+  ADC #$08
   STA shipTile1X
   STA shipTile4X
 
   LDA shipTile2X
   CLC
-  ADC #$01
+  ADC #$08
   STA shipTile2X
   STA shipTile5X
 
   LDA shipTile3X
   CLC
-  ADC #$01
+  ADC #$08
   STA shipTile3X
   STA shipTile6X
 EndReadRight:
