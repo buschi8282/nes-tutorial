@@ -16,8 +16,37 @@ pointerBackgroundHighByte .rs 1
 ;from left to right, the bits reppresent a, b, select, start, d-pad up,
 ;d-pad down, d-pad left, d-pad right
 last_controller_state .rs 1 ;putting this in page 0 so we can access it quickly
-  LDA #$00
-  STA last_controller_state ;initializing to zero
+current_controller_state .rs 1
+
+a_button .rs 1
+b_button .rs 1
+select_button .rs 1
+start_button .rs 1
+up_button .rs 1
+down_button .rs 1
+left_button .rs 1
+right_button .rs 1
+
+  LDA #%10000000
+  STA a_button
+  LDA #%01000000
+  STA b_button
+  LDA #%00100000
+  STA select_button
+  LDA #%00010000
+  STA start_button
+  LDA #%00001000
+  STA up_button
+  LDA #%00000100
+  STA down_button
+  LDA #%00000010
+  STA left_button
+  LDA #%00000001
+  STA right_button
+
+
+controller1 = $4016
+controller2 = $4017
 
 shipTile1Y = $0300
 shipTile2Y = $0304
@@ -124,33 +153,26 @@ LoadSprites:
   BNE .Loop
   RTS
 
-ReadPlayerOneControls:
+ReadController1:
   LDA #$01
-  STA $4016
-  LDA #$00
-  STA $4016
+  STA controller1
+  STA current_controller_state
+  LSR A
+  STA controller1
+.loop:
+  LDA controller1
+  LSR A
+  ROL current_controller_state
+  BCC .loop
+  RTS
 
-  LDA $4016       ; Player 1 - A
-  LDA $4016       ; Player 1 - B
-  LDA $4016       ; Player 1 - Select
-  LDA $4016       ; Player 1 - Start
+MoveShip:
 
 ReadUp:
-  LDA $4016       ; Player 1 - Up
-  AND #%00000001
+  LDA current_controller_state
+  AND #up_button ; enabling this seems to work as expected
+  ;AND #%00001000
   BEQ EndReadUp
-
-  ;if bit 5 is set from last_controller_state, it means the player is still
-  ;holding d-pad down and the ship has already moved.
-  LDA last_controller_state
-  AND #%00001000
-  BEQ EndReadUp ; don't move the ship in this case
-
-  ;if bit 5 was not set, it means the player was not already holding d-pad down
-  ;in this case we'll set bit 6 and move the ship
-  LDA last_controller_state
-  ORA #%00001000
-  STA last_controller_state
 
   LDA shipTile1Y
   SEC
@@ -168,21 +190,12 @@ ReadUp:
 EndReadUp:
 
 ReadDown:
-  LDA $4016       ; Player 1 - Down
-  AND #%00000001
-  BEQ EndReadDown
-
-  ;if bit 6 is set from last_controller_state, it means the player is still
-  ;holding d-pad down and the ship has already moved.
-  LDA last_controller_state
+  LDA current_controller_state
+  ;AND #down_button ; enabling this causes up and down to do nothing, right
+                   ;button moves ship diagonal down/right, left button works as
+                   ;expected
   AND #%00000100
-  BEQ EndReadDown ; don't move the ship in this case
-
-  ;if bit 6 was not set, it means the player was not already holding d-pad down
-  ;in this case we'll set bit 6 and move the ship
-  LDA last_controller_state
-  ORA #%00000100
-  STA last_controller_state
+  BEQ EndReadDown
 
   LDA shipTile1Y
   CLC
@@ -200,21 +213,11 @@ ReadDown:
 EndReadDown:
 
 ReadLeft:
-  LDA $4016       ; Player 1 - Left
-  AND #%00000001
-  BEQ EndReadLeft
-
-  ;if bit 7 is set from last_controller_state, it means the player is still
-  ;holding d-pad left and the ship has already moved.
-  LDA last_controller_state
+  LDA current_controller_state
+  ;AND #left_button ; enabling this causes up button to move ship diagonal up and
+                   ;right, other buttons work as expected
   AND #%00000010
-  BEQ EndReadLeft ; don't move the ship in this case
-
-  ;if bit 7 was not set, it means the player was not already holding d-pad left
-  ;in this case we'll set bit 7 and move the ship
-  LDA last_controller_state
-  ORA #%00000010
-  STA last_controller_state
+  BEQ EndReadLeft
 
   LDA shipTile1X
   SEC
@@ -236,21 +239,11 @@ ReadLeft:
 EndReadLeft:
 
 ReadRight:
-  LDA $4016       ; Player 1 - Right
+  LDA current_controller_state
+  ;AND #right_button ; using this causes left button to do nothing, up button
+                    ;moves ship diagonal, right and down work as expected
   AND #%00000001
   BEQ EndReadRight
-
-  ;if bit 8 is set from last_controller_state, it means the player is still
-  ;holding d-pad right and the ship has already moved.
-  LDA last_controller_state
-  AND #%00000001
-  BEQ EndReadRight ; don't move the ship in this case
-
-  ;if bit 8 was not set, it means the player was not already holding d-pad Right
-  ;in this case we'll set bit 8 and move the ship
-  LDA last_controller_state
-  ORA #%00000001
-  STA last_controller_state
 
   LDA shipTile1X
   CLC
@@ -279,7 +272,8 @@ NMI:
   LDA #$03
   STA $4014
 
-  JSR ReadPlayerOneControls
+  JSR ReadController1
+  JSR MoveShip
 
   RTI
 
