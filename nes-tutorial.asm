@@ -18,32 +18,14 @@ pointerBackgroundHighByte .rs 1
 last_controller_state .rs 1 ;putting this in page 0 so we can access it quickly
 current_controller_state .rs 1
 
-a_button .rs 1
-b_button .rs 1
-select_button .rs 1
-start_button .rs 1
-up_button .rs 1
-down_button .rs 1
-left_button .rs 1
-right_button .rs 1
-
-  LDA #%10000000
-  STA a_button
-  LDA #%01000000
-  STA b_button
-  LDA #%00100000
-  STA select_button
-  LDA #%00010000
-  STA start_button
-  LDA #%00001000
-  STA up_button
-  LDA #%00000100
-  STA down_button
-  LDA #%00000010
-  STA left_button
-  LDA #%00000001
-  STA right_button
-
+A_BUTTON = %10000000
+B_BUTTON =%01000000
+SELECT_BUTTON = %00100000
+START_BUTTON = %00010000
+UP_BUTTON = %00001000
+DOWN_BUTTON = %00000100
+LEFT_BUTTON = %00000010
+RIGHT_BUTTON = %00000001
 
 controller1 = $4016
 controller2 = $4017
@@ -170,8 +152,7 @@ MoveShip:
 
 ReadUp:
   LDA current_controller_state
-  AND #up_button ; enabling this seems to work as expected
-  ;AND #%00001000
+  AND #UP_BUTTON
   BEQ EndReadUp
 
   LDA shipTile1Y
@@ -191,10 +172,7 @@ EndReadUp:
 
 ReadDown:
   LDA current_controller_state
-  ;AND #down_button ; enabling this causes up and down to do nothing, right
-                   ;button moves ship diagonal down/right, left button works as
-                   ;expected
-  AND #%00000100
+  AND #DOWN_BUTTON
   BEQ EndReadDown
 
   LDA shipTile1Y
@@ -214,9 +192,7 @@ EndReadDown:
 
 ReadLeft:
   LDA current_controller_state
-  ;AND #left_button ; enabling this causes up button to move ship diagonal up and
-                   ;right, other buttons work as expected
-  AND #%00000010
+  AND #LEFT_BUTTON
   BEQ EndReadLeft
 
   LDA shipTile1X
@@ -240,9 +216,7 @@ EndReadLeft:
 
 ReadRight:
   LDA current_controller_state
-  ;AND #right_button ; using this causes left button to do nothing, up button
-                    ;moves ship diagonal, right and down work as expected
-  AND #%00000001
+  AND #RIGHT_BUTTON
   BEQ EndReadRight
 
   LDA shipTile1X
