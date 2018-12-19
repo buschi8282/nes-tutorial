@@ -18,6 +18,17 @@ pointerBackgroundHighByte .rs 1
 last_controller_state .rs 1 ;putting this in page 0 so we can access it quickly
 current_controller_state .rs 1
 
+;counter to keep track of how many frames have elapsed since initial press of up
+up_button_counter .rs 1
+;counter to keep track of how many frames since last movement while in sustained
+;motion
+up_button_active_counter .rs 1
+
+;16 frame delay from initial movement to sustained movement
+BUTTON_ACTIVE_DELAY1 = $10
+;4 frame delay between sustained movement to throttle the speed of the sprites
+BUTTON_ACTIVE_DELAY2 = $04
+
 A_BUTTON = %10000000
 B_BUTTON =%01000000
 SELECT_BUTTON = %00100000
@@ -153,8 +164,41 @@ MoveShip:
 ReadUp:
   LDA current_controller_state
   AND #UP_BUTTON
-  BEQ EndReadUp
+  BEQ EndReadUp ; do nothing if up is not pressed
 
+;check if up is already pressed
+  LDA last_controller_state
+  AND #UP_BUTTON
+  BNE UpAlreadyHeld ; if it's already pressed skip counter initialization
+
+;if we make it to here, this is the initial up button press
+;so we set the up button counters to zero
+  LDA #$00
+  STA up_button_counter
+  STA up_button_active_counter
+
+  ;this code is to do an unconditional branch. there must be better way to do
+  ;this
+  LDA #$00
+  CMP $00
+  BEQ MoveTheShipUp ;skip code to increment counter
+
+UpAlreadyHeld: ;if we make it here, up is already held down so we
+;increment counter
+
+  INC up_button_counter
+  LDA up_button_counter
+  CMP #BUTTON_ACTIVE_DELAY1
+  BCC EndReadUp ; if button is held down less than delay do nothing
+
+  ;if we make it here, we've already completed the initial delay and are in
+  ;sustained movement. let's throttle speed of movement a little bit
+  INC up_button_active_counter
+  LDA up_button_active_counter
+  CMP #BUTTON_ACTIVE_DELAY2
+  BCC EndReadUp
+
+MoveTheShipUp:
   LDA shipTile1Y
   SEC
   SBC #$08
@@ -168,6 +212,10 @@ ReadUp:
   STA shipTile4Y
   STA shipTile5Y
   STA shipTile6Y
+
+  ;reset sustained movement throttle counter
+  LDA #$00
+  STA up_button_active_counter
 EndReadUp:
 
 ReadDown:
@@ -246,6 +294,8 @@ NMI:
   LDA #$03
   STA $4014
 
+  LDA current_controller_state
+  STA last_controller_state
   JSR ReadController1
   JSR MoveShip
 
