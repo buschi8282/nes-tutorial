@@ -15,7 +15,6 @@ pointerBackgroundHighByte .rs 1
 ;this is a bitmask to keep track of whether a user is holding down a button
 ;from left to right, the bits reppresent a, b, select, start, d-pad up,
 ;d-pad down, d-pad left, d-pad right
-last_controller_state .rs 1 ;putting this in page 0 so we can access it quickly
 current_controller_state .rs 1
 
 buttons_pressed .rs 1
@@ -24,11 +23,6 @@ dpad_delay_auto_shift_active .rs 1
 dpad_delay_auto_shift_counter .rs 1
 sustained_movement_counter .rs 1
 
-;counter to keep track of how many frames have elapsed since initial press of up
-up_button_counter .rs 1
-;counter to keep track of how many frames since last movement while in sustained
-;motion
-up_button_active_counter .rs 1
 
 ;16 frame delay from initial movement to sustained movement
 BUTTON_ACTIVE_DELAY1 = $10
@@ -218,44 +212,23 @@ SkipIncrementDASTimer:
 
 MoveShip:
 
+  INC sustained_movement_counter
+
 ReadUp:
-  LDA current_controller_state
+  LDA buttons_pressed
   AND #UP_BUTTON
-  BEQ EndReadUp ; do nothing if up is not pressed
+  BNE MoveShipUp
 
-;check if up is already pressed
-  LDA last_controller_state
+  LDA dpad_delay_auto_shift_active
   AND #UP_BUTTON
-  BNE UpAlreadyHeld ; if it's already pressed skip counter initialization
+  BEQ EndReadUp
 
-;if we make it to here, this is the initial up button press
-;so we set the up button counters to zero
-  LDA #$00
-  STA up_button_counter
-  STA up_button_active_counter
 
-  ;this code is to do an unconditional branch. there must be better way to do
-  ;this
-  LDA #$00
-  CMP $00
-  BEQ MoveTheShipUp ;skip code to increment counter
-
-UpAlreadyHeld: ;if we make it here, up is already held down so we
-;increment counter
-
-  INC up_button_counter
-  LDA up_button_counter
-  CMP #BUTTON_ACTIVE_DELAY1
-  BCC EndReadUp ; if button is held down less than delay do nothing
-
-  ;if we make it here, we've already completed the initial delay and are in
-  ;sustained movement. let's throttle speed of movement a little bit
-  INC up_button_active_counter
-  LDA up_button_active_counter
+  LDA sustained_movement_counter
   CMP #BUTTON_ACTIVE_DELAY2
   BCC EndReadUp
 
-MoveTheShipUp:
+MoveShipUp:
   LDA shipTile1Y
   SEC
   SBC #$08
@@ -270,9 +243,9 @@ MoveTheShipUp:
   STA shipTile5Y
   STA shipTile6Y
 
-  ;reset sustained movement throttle counter
+  ;set counter to zero since we're about to go into DAS
   LDA #$00
-  STA up_button_active_counter
+  STA sustained_movement_counter
 EndReadUp:
 
 ReadDown:
@@ -281,12 +254,11 @@ ReadDown:
   AND #DOWN_BUTTON
   BNE MoveShipDown
 
-CheckIfDownDAS:
   LDA dpad_delay_auto_shift_active
   AND #DOWN_BUTTON
   BEQ EndReadDown
 
-  INC sustained_movement_counter
+
   LDA sustained_movement_counter
   CMP #BUTTON_ACTIVE_DELAY2
   BCC EndReadDown
@@ -312,10 +284,22 @@ MoveShipDown:
 EndReadDown:
 
 ReadLeft:
-  LDA buttons_held
+
+  LDA buttons_pressed
+  AND #LEFT_BUTTON
+  BNE MoveShipLeft
+
+  LDA dpad_delay_auto_shift_active
   AND #LEFT_BUTTON
   BEQ EndReadLeft
 
+
+  LDA sustained_movement_counter
+  CMP #BUTTON_ACTIVE_DELAY2
+  BCC EndReadLeft
+
+MoveShipLeft:
+
   LDA shipTile1X
   SEC
   SBC #$08
@@ -333,13 +317,26 @@ ReadLeft:
   SBC #$08
   STA shipTile3X
   STA shipTile6X
+  ;set counter to zero since we're about to go into DAS
+  LDA #$00
+  STA sustained_movement_counter
 EndReadLeft:
 
 ReadRight:
-  LDA buttons_held
+  LDA buttons_pressed
+  AND #RIGHT_BUTTON
+  BNE MoveShipRight
+
+  LDA dpad_delay_auto_shift_active
   AND #RIGHT_BUTTON
   BEQ EndReadRight
 
+
+  LDA sustained_movement_counter
+  CMP #BUTTON_ACTIVE_DELAY2
+  BCC EndReadRight
+
+MoveShipRight:
   LDA shipTile1X
   CLC
   ADC #$08
@@ -357,6 +354,9 @@ ReadRight:
   ADC #$08
   STA shipTile3X
   STA shipTile6X
+  ;set counter to zero since we're about to go into DAS
+  LDA #$00
+  STA sustained_movement_counter
 EndReadRight:
 
   RTS
@@ -367,8 +367,6 @@ NMI:
   LDA #$03
   STA $4014
 
-  LDA current_controller_state
-  STA last_controller_state
   JSR ReadController1
   JSR MoveShip
 
