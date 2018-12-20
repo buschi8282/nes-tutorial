@@ -18,6 +18,12 @@ pointerBackgroundHighByte .rs 1
 last_controller_state .rs 1 ;putting this in page 0 so we can access it quickly
 current_controller_state .rs 1
 
+buttons_pressed .rs 1
+buttons_held .rs 1
+dpad_delay_auto_shift_active .rs 1
+dpad_delay_auto_shift_counter .rs 1
+sustained_movement_counter .rs 1
+
 ;counter to keep track of how many frames have elapsed since initial press of up
 up_button_counter .rs 1
 ;counter to keep track of how many frames since last movement while in sustained
@@ -37,6 +43,7 @@ UP_BUTTON = %00001000
 DOWN_BUTTON = %00000100
 LEFT_BUTTON = %00000010
 RIGHT_BUTTON = %00000001
+DPAD_BUTTONS = %00001111
 
 controller1 = $4016
 controller2 = $4017
@@ -147,6 +154,9 @@ LoadSprites:
   RTS
 
 ReadController1:
+  LDX buttons_held ;register x saves buttons held from last frame
+  LDY buttons_pressed ; register y saves buttons initially pressed last frame
+
   LDA #$01
   STA controller1
   STA current_controller_state
@@ -157,6 +167,53 @@ ReadController1:
   LSR A
   ROL current_controller_state
   BCC .loop
+
+  ;wipe out buttons_held and buttons_pressed for any button not currently active
+  LDA buttons_held
+  AND current_controller_state
+  STA buttons_held
+  LDA buttons_pressed
+  AND current_controller_state
+  STA buttons_pressed
+
+  ;wipe out delay auto shift status for any D-Pad button not active
+  LDA dpad_delay_auto_shift_active
+  AND current_controller_state
+  AND DPAD_BUTTONS
+  STA dpad_delay_auto_shift_active
+  BEQ SkipResetDASTimer
+  ; reset counter to 0 if no dpad buttons are active
+  LDA #$00
+  STA dpad_delay_auto_shift_counter
+SkipResetDASTimer:
+  ;pressed buttons from last frame that are still pressed are now held
+  TYA ; fetch last frame button pressed from Y register
+  AND current_controller_state ; clear any buttons not currently active
+  ORA buttons_held
+  STA buttons_held
+
+  ;buttons that are currently active but not held should be considered pressed
+  ;assuming buttons_held is still in accumulator a
+  EOR current_controller_state
+  STA buttons_pressed
+
+  ;calculate delay auto shift status for d-pad
+  LDA buttons_held
+  AND #DPAD_BUTTONS
+  TAX ; store this currently held dpad buttons in case we need it later
+  BEQ SkipIncrementDASTimer ; skip if no d-pad buttons are held
+  LDA dpad_delay_auto_shift_active
+  CMP #$00
+  BNE SkipIncrementDASTimer ; if DAS is already active, don't increment
+  INC dpad_delay_auto_shift_counter
+  LDA dpad_delay_auto_shift_counter
+  CMP #BUTTON_ACTIVE_DELAY1
+  BCC SkipIncrementDASTimer
+  TXA
+  STA dpad_delay_auto_shift_active
+
+SkipIncrementDASTimer:
+
   RTS
 
 MoveShip:
@@ -219,10 +276,22 @@ MoveTheShipUp:
 EndReadUp:
 
 ReadDown:
-  LDA current_controller_state
+
+  LDA buttons_pressed
+  AND #DOWN_BUTTON
+  BNE MoveShipDown
+
+CheckIfDownDAS:
+  LDA dpad_delay_auto_shift_active
   AND #DOWN_BUTTON
   BEQ EndReadDown
 
+  INC sustained_movement_counter
+  LDA sustained_movement_counter
+  CMP #BUTTON_ACTIVE_DELAY2
+  BCC EndReadDown
+
+MoveShipDown:
   LDA shipTile1Y
   CLC
   ADC #$08
@@ -236,10 +305,14 @@ ReadDown:
   STA shipTile4Y
   STA shipTile5Y
   STA shipTile6Y
+
+;set counter to zero since we're about to go into DAS
+  LDA #$00
+  STA sustained_movement_counter
 EndReadDown:
 
 ReadLeft:
-  LDA current_controller_state
+  LDA buttons_held
   AND #LEFT_BUTTON
   BEQ EndReadLeft
 
@@ -263,7 +336,7 @@ ReadLeft:
 EndReadLeft:
 
 ReadRight:
-  LDA current_controller_state
+  LDA buttons_held
   AND #RIGHT_BUTTON
   BEQ EndReadRight
 
